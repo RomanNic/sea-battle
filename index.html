@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Морской Бой - Роботекст Edition</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #2c3e50;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 10px; }
+
+        .game-wrapper {
+            display: flex;
+            gap: 50px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .board-container {
+            text-align: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 35px);
+            grid-template-rows: repeat(10, 35px);
+            gap: 2px;
+            background-color: #34495e;
+            padding: 5px;
+            border: 3px solid #ecf0f1;
+            border-radius: 4px;
+        }
+
+        .cell {
+            width: 35px;
+            height: 35px;
+            background-color: #3498db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        /* Стили для ячеек */
+        .cell:hover { background-color: #2980b9; }
+        .cell.miss { background-color: #95a5a6; } /* Промах */
+        .cell.hit { background-color: #e74c3c; }  /* Попадание */
+        .cell.ship { background-color: #2ecc71; } /* Корабль (виден только игроку) */
+
+        #status {
+            margin: 20px;
+            font-size: 1.5rem;
+            height: 40px;
+            color: #f1c40f;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            background-color: #2ecc71;
+            border: none;
+            color: white;
+            border-radius: 5px;
+        }
+
+        button:hover { background-color: #27ae60; }
+
+        .legend {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            display: flex;
+            gap: 15px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 15px; height: 15px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <h1>МОРСКОЙ БОЙ</h1>
+    <div id="status">Нажмите "Начать игру"</div>
+
+    <div class="game-wrapper">
+        <div class="board-container">
+            <h3>Ваше поле</h3>
+            <div id="player-board" class="grid"></div>
+        </div>
+        <div class="board-container">
+            <h3>Поле противника</h3>
+            <div id="enemy-board" class="grid"></div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background: #3498db"></div> Вода</div>
+        <div class="legend-item"><div class="dot" style="background: #95a5a6"></div> Промах</div>
+        <div class="legend-item"><div class="dot" style="background: #e74c3c"></div> Попадание</div>
+        <div class="legend-item"><div class="dot" style="background: #2ecc71"></div> Корабль</div>
+    </div>
+
+    <div class="controls">
+        <button onclick="resetGame()">Начать заново</button>
+    </div>
+
+    <script>
+        const SIZE = 10;
+        const SHIP_COUNT = 5; // Количество кораблей (в данном упрощении - по 1 клетке)
+        
+        let playerBoard = [];
+        let enemyBoard = [];
+        let playerShips = [];
+        let enemyShips = [];
+        let gameOver = false;
+
+        // Инициализация игрового поля
+        function initGame() {
+            gameOver = false;
+            document.getElementById('status').innerText = "Ваш ход! Стреляйте по полю врага.";
+            
+            playerBoard = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            enemyBoard = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            
+            playerShips = generateShips();
+            enemyShips = generateShips();
+
+            // Копируем расположение кораблей в массивы полей для логики
+            playerShips.forEach(s => playerBoard[s.r][s.c] = 1);
+            enemyShips.forEach(s => enemyBoard[s.r][s.c] = 1);
+
+            renderBoard('player-board', playerBoard, true);
+            renderBoard('enemy-board', enemyBoard, false);
+        }
+
+        // Генерация случайных координат для кораблей
+        function generateShips() {
+            let ships = [];
+            while (ships.length < SHIP_COUNT) {
+                let r = Math.floor(Math.random() * SIZE);
+                let c = Math.floor(Math.random() * SIZE);
+                // Проверка, чтобы не ставить два корабля в одну клетку
+                if (!ships.some(s => s.r === r && s.c === c)) {
+                    ships.push({r, c});
+                }
+            }
+            return ships;
+        }
+
+        // Отрисовка поля в HTML
+        function renderBoard(elementId, boardData, showShips) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+            
+            for (let r = 0; r < SIZE; r++) {
+                for (let c = 0; c < SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+
+                    // Показываем корабли только на своем поле
+                    if (showShips && boardData[r][c] === 1) {
+                        cell.classList.add('ship');
+                    }
+
+                    if (elementId === 'enemy-board') {
+                        cell.addEventListener('click', () => playerShoot(r, c, cell));
+                    }
+
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        // Ход игрока
+        function playerShoot(r, c, cell) {
+            if (gameOver || cell.classList.contains('hit') || cell.classList.contains('miss')) return;
+
+            if (enemyShips.some(s => s.r === r && s.c === c)) {
+                cell.classList.add('hit');
+                cell.innerText = 'X';
+                checkWin();
+            } else {
+                cell.classList.add('miss');
+                cell.innerText = '•';
+            }
+
+            if (!gameOver) {
+                document.getElementById('status').innerText = "Ход компьютера...";
+                setTimeout(enemyShoot, 600);
+            }
+        }
+
+        // Ход компьютера
+        function enemyShoot() {
+            if (gameOver) return;
+
+            let r, c, cell;
+            let attempts = 0;
+
+            // Ищем случайную клетку на поле игрока
+            do {
+                r = Math.floor(Math.random() * SIZE);
+                c = Math.floor(Math.random() * SIZE);
+                cell = document.querySelector(#player-board [data-r=&quot;${r}&quot;][data-c=&quot;${c}&quot;]);
+                attempts++;
+            } while (
+                (cell.classList.contains('hit') || cell.classList.contains('miss')) && 
+                attempts < 100
+            );
+
+            if (playerShips.some(s => s.r === r && s.c === c)) {
+                cell.classList.add('hit');
+                cell.innerText = 'X';
+                document.getElementById('status').innerText = "Компьютер попал!";
+                setTimeout(enemyShoot, 600); // Компьютер продолжает, если попал
+            } else {
+                cell.classList.add('miss');
+                cell.innerText = '•';
+                document.getElementById('status').innerText = "Ваш ход!";
+            }
+
+            checkWin();
+        }
+
+        // Проверка условий победы
+        function checkWin() {
+            const enemyHits = document.querySelectorAll('#enemy-board .hit').length;
+            const playerHits = document.querySelectorAll('#player-board .hit').length;
+
+            if (enemyHits === SHIP_COUNT) {
+                document.getElementById('status').innerText = "🎉 ВЫ ПОБЕДИЛИ!";
+                gameOver = true;
+            } else if (playerHits === SHIP_COUNT) {
+                document.getElementById('status').innerText = "💀 КОМПЬЮТЕР ПОБЕДИЛ!";
+                gameOver = true;
+            }
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Запуск при загрузке
+        initGame();
+    </script>
+</body>
+</html>
